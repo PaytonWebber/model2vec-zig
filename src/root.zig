@@ -56,10 +56,22 @@ pub const Model = struct {
             break :blk if (v == .bool) v.bool else true;
         };
 
-        var tok = try Tokenizer.initFromJson(gpa, tok_bytes);
+        return loadFromBytes(gpa, tok_bytes, st_bytes, .{ .normalize = norm });
+    }
+
+    /// Load from in-memory file contents, for models shipped inside the
+    /// binary via @embedFile. `normalize` mirrors config.json's `normalize`
+    /// key; the potion family uses true.
+    pub fn loadFromBytes(
+        gpa: std.mem.Allocator,
+        tokenizer_json: []const u8,
+        safetensors_bytes: []const u8,
+        options: struct { normalize: bool = true },
+    ) LoadError!Model {
+        var tok = try Tokenizer.initFromJson(gpa, tokenizer_json);
         errdefer tok.deinit();
 
-        const emb = try safetensors.parse(gpa, st_bytes);
+        const emb = try safetensors.parse(gpa, safetensors_bytes);
 
         if (tok.unk_id >= emb.rows) return error.BadShape;
 
@@ -69,7 +81,7 @@ pub const Model = struct {
             .embeddings = emb.data,
             .rows = emb.rows,
             .dim = emb.cols,
-            .normalize = norm,
+            .normalize = options.normalize,
         };
     }
 
