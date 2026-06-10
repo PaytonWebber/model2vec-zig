@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: "0.16.0"
+
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: potion-base-8M-v1
+
+      - name: Fetch parity model
+        run: ./scripts/fetch-model.sh potion-base-8M
+
+      - name: Tests and format check
+        run: zig build check
+
+      - name: Bench
+        run: zig build bench
