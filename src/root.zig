@@ -102,8 +102,8 @@ pub const Model = struct {
     }
 
     /// Embed into a caller-owned buffer of exactly `dim` values. `scratch` is
-    /// for tokenization temporaries; an arena that is reset between calls is
-    /// the natural fit.
+    /// for tokenization temporaries and is fully released before returning,
+    /// so any allocator works; an arena is merely the fastest choice.
     pub fn embedInto(self: *const Model, scratch: std.mem.Allocator, text: []const u8, out: []f32) !void {
         std.debug.assert(out.len == self.dim);
 
@@ -112,6 +112,7 @@ pub const Model = struct {
         const bounded = truncateChars(text, self.max_tokens * self.tok.median_token_len);
 
         var ids: std.ArrayList(u32) = .empty;
+        defer ids.deinit(scratch);
         try self.tok.encode(scratch, bounded, &ids);
 
         @memset(out, 0);

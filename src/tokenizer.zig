@@ -87,6 +87,7 @@ pub const Tokenizer = struct {
     /// Does not add special tokens, matching model2vec inference.
     pub fn encode(self: *const Tokenizer, scratch: std.mem.Allocator, text: []const u8, out: *std.ArrayList(u32)) !void {
         const normalized = try normalize(scratch, text);
+        defer scratch.free(normalized);
 
         var words = std.mem.tokenizeScalar(u8, normalized, ' ');
         while (words.next()) |chunk| {
@@ -120,7 +121,9 @@ pub const Tokenizer = struct {
         }
 
         var pieces: std.ArrayList(u32) = .empty;
+        defer pieces.deinit(scratch);
         var buf: std.ArrayList(u8) = .empty;
+        defer buf.deinit(scratch);
 
         var start: usize = 0;
         while (start < word.len) {
@@ -145,8 +148,9 @@ pub const Tokenizer = struct {
 
 /// BertNormalizer: drop control characters, fold case and accents, surround
 /// CJK ideographs with spaces, and map all whitespace to a single space.
-fn normalize(scratch: std.mem.Allocator, text: []const u8) ![]const u8 {
+fn normalize(scratch: std.mem.Allocator, text: []const u8) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(scratch);
     try out.ensureTotalCapacity(scratch, text.len);
 
     var i: usize = 0;
@@ -180,7 +184,7 @@ fn normalize(scratch: std.mem.Allocator, text: []const u8) ![]const u8 {
             try appendCp(scratch, &out, folded);
         }
     }
-    return out.items;
+    return out.toOwnedSlice(scratch);
 }
 
 fn appendCp(scratch: std.mem.Allocator, out: *std.ArrayList(u8), cp: u21) !void {
