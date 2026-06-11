@@ -93,37 +93,6 @@ Measured per format on potion-base-8M (same text and machine as above):
 | i8 | 7.6 MB | ~0.9997 cosine | 4.8 us |
 | tq4 | 3.9 MB | similarity drift < 0.05 | 4.8 us |
 
-## Compared with model2vec-rs
-
-The official Rust port ([model2vec-rs](https://github.com/MinishLab/model2vec-rs))
-is the more complete implementation: it runs any tokenizer the Hub produces
-through the HuggingFace `tokenizers` engine, reads f16 and i8 weights, has a
-batch API, and fetches models from the Hub directly. This library covers the
-potion family's single-text hot path and deliberately nothing else.
-
-That difference in scope is also where the performance difference comes from.
-Same machine, same model file (potion-base-8M), same 17-token text, 50k
-iterations, release builds of both:
-
-| | model2vec-zig | model2vec-rs 0.2.1 |
-|---|---|---|
-| single-text embed | 4.1-4.3 us (~240k/s) | 24.4 us (~41k/s) |
-| peak RSS | 69.0 MB | 77.9 MB |
-| model load | ~40 ms | ~68 ms |
-
-The gap is design, not language. `encode_single` in the Rust crate goes
-through its batch machinery and allocates a fresh vector per call, and the
-general tokenizers engine pays for flexibility this library dropped;
-`embedInto` here writes into a caller-owned buffer with arena scratch, so
-steady-state embedding does not allocate. A Rust implementation shaped the
-same way would close most of the distance. Both processes are dominated by
-the same ~29 MB f32 matrix; the RSS difference is tokenizer structures and
-allocator behavior, not the model.
-
-For batch workloads the Rust crate amortizes far better and is the right
-choice. This library is for the other case: one text at a time on a latency
-budget, where the per-call overhead is the whole story.
-
 ## Testing
 
 `zig build test` runs unit tests for the tokenizer, the safetensors reader,
