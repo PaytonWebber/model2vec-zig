@@ -19,6 +19,11 @@ Measured on potion-base-8M (x86_64 Linux, ReleaseFast): 4.1 us per embed of a
 17-token text, about 240k embeds/s, from a ~30 MB model file. A warm local
 Ollama round trip for the same job is 20-30 ms, and a cold one is seconds.
 
+The bundled quantizer cuts that further: a TurboQuant-style 4-bit format runs
+the 129 MB retrieval-tuned model from a 16 MB matrix at the same speed, with
+measured similarity drift under 0.05. Why static embedders compress this well
+is written up in [docs/turboquant.md](docs/turboquant.md).
+
 ## Why
 
 Plenty of programs want semantic similarity but can't justify a model server:
@@ -73,7 +78,12 @@ This runs the potion family, not every model on the Hub:
   structure is preserved, not coordinates. Vectors from a tq4 model are not
   comparable with any other build of the same model; persist them keyed to
   `Model.fingerprint()`. Pairwise similarity drift measures under 0.05
-  against f32 on the test texts.
+  against f32 on the test texts. The reasoning and full measurements are in
+  [docs/turboquant.md](docs/turboquant.md).
+- The normalizer folds Latin accents with a table instead of full Unicode NFD
+  (Zig's std has no normalization). Latin-script and code text matches the
+  reference exactly; other scripts pass through unfolded and may tokenize to
+  [UNK] where the reference would not.
 
 Measured per format on potion-base-8M (same text and machine as above):
 
@@ -82,10 +92,6 @@ Measured per format on potion-base-8M (same text and machine as above):
 | f32 | 30.2 MB | exact | 4.2 us |
 | i8 | 7.6 MB | ~0.9997 cosine | 4.8 us |
 | tq4 | 3.9 MB | similarity drift < 0.05 | 4.8 us |
-- The normalizer folds Latin accents with a table instead of full Unicode NFD
-  (Zig's std has no normalization). Latin-script and code text matches the
-  reference exactly; other scripts pass through unfolded and may tokenize to
-  [UNK] where the reference would not.
 
 ## Compared with model2vec-rs
 
