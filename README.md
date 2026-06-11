@@ -59,7 +59,12 @@ allocator.
 This runs the potion family, not every model on the Hub:
 
 - WordPiece tokenizers only. BPE and Unigram models are rejected at load.
-- F32 safetensors only; quantized f16/i8 model files are not read yet.
+- F32 and I8 safetensors; f16 is not read yet. I8 models keep the quantized
+  matrix in memory (4x smaller) and pool the raw values, which matches the
+  reference because the global scale cancels under L2 normalization. The
+  bundled `m2v-quantize` tool converts an f32 model to i8 with output
+  byte-identical to the reference implementation's quantizer; embedding drift
+  from quantization measures ~0.9997 cosine.
 - The normalizer folds Latin accents with a table instead of full Unicode NFD
   (Zig's std has no normalization). Latin-script and code text matches the
   reference exactly; other scripts pass through unfolded and may tokenize to

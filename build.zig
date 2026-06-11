@@ -25,6 +25,16 @@ pub fn build(b: *std.Build) void {
     check_step.dependOn(test_step);
     check_step.dependOn(&fmt.step);
 
+    const quantizer = b.addExecutable(.{
+        .name = "m2v-quantize",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/quantize.zig"),
+            .target = target,
+            .optimize = .ReleaseFast,
+        }),
+    });
+    b.installArtifact(quantizer);
+
     const bench = b.addExecutable(.{
         .name = "bench",
         .root_module = b.createModule(.{
