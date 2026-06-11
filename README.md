@@ -1,9 +1,28 @@
 # model2vec-zig
 
-[model2vec](https://github.com/MinishLab/model2vec) inference in pure Zig.
+[Model2Vec](https://github.com/MinishLab/model2vec) inference in pure Zig.
 Static embeddings: a text becomes a vector through tokenization, a table
-lookup, and a mean. There is no transformer at runtime, so there is nothing to
-install and nothing to wait for.
+lookup, and a mean. There is no transformer at runtime.
+
+## Quickstart
+
+Add the dependency:
+
+```bash
+zig fetch --save=model2vec "git+https://github.com/PaytonWebber/model2vec-zig#v0.1.0"
+```
+
+```zig
+// build.zig
+const model2vec = b.dependency("model2vec", .{ .target = target, .optimize = optimize });
+exe.root_module.addImport("model2vec", model2vec.module("model2vec"));
+```
+
+Fetch a model and embed:
+
+```bash
+./scripts/fetch-model.sh potion-base-8M
+```
 
 ```zig
 const m2v = @import("model2vec");
@@ -15,83 +34,110 @@ const vec = try model.embed(allocator, "the daemon owns the store");
 // []f32 of model.dim values, L2-normalized
 ```
 
-Measured on potion-base-8M (x86_64 Linux, ReleaseFast): 4.1 us per embed of a
-17-token text, about 240k embeds/s, from a ~30 MB model file. A warm local
-Ollama round trip for the same job is 20-30 ms, and a cold one is seconds.
+`Model.loadFromBytes` takes the tokenizer and safetensors as byte slices, so
+a model can be compiled into the binary with `@embedFile` and the program
+ships as a single file.
 
-The bundled quantizer cuts that further: a TurboQuant-style 4-bit format runs
-the 129 MB retrieval-tuned model from a 16 MB matrix at the same speed. On
-the 10 retrieval tasks of MTEB(eng, v2) it scores 34.86 mean NDCG@10 against
-35.06 for f32, measured on a harness that reproduces MinishLab's published
-per-task scores. Why static embedders compress this well is written up in
-[docs/turboquant.md](docs/turboquant.md).
+## Main features
 
-## Why
+- **Small**: potion-base-8M is ~30 MB on disk as published. The bundled
+  quantizer reduces it to 7.6 MB (i8) or 3.9 MB (4-bit) with measured
+  quality cost (see Quantization).
+- **Fast inference**: 4.1 us per embed of a 17-token text on potion-base-8M
+  (x86_64 Linux, ReleaseFast), about 240k embeds per second.
+- **Zero dependencies**: Zig std only. No model server, no network, no
+  native libraries. Embedding works offline on first run.
+- **Reference parity**: output vectors match the Python implementation to
+  an absolute difference under 1e-5, and the i8 quantizer is byte-identical
+  to the reference quantizer.
+- **Allocation-free hot path**: `Model.embedInto` writes into a caller-owned
+  buffer and uses its allocator only for tokenization scratch, so an arena
+  reset between calls embeds with no per-call heap growth.
 
-Plenty of programs want semantic similarity but can't justify a model server:
-CLI tools, agent hooks that run on every prompt, daemons that should work
-offline on first run. Static embeddings make that trade explicit: roughly
-82-92% of all-MiniLM-L6-v2's quality (see the
-[model2vec results](https://github.com/MinishLab/model2vec/blob/main/results/README.md))
-at microsecond latency with zero dependencies.
+## What is this?
 
-Pair it with a vector index and you have local semantic search inside one
-static binary.
+Model2Vec is MinishLab's technique for turning a sentence transformer into a
+static embedding model: the vocabulary is passed through the transformer once
+at distillation time, leaving a single embedding matrix. Inference is then
+tokenize, look up, mean-pool, and normalize, which runs in microseconds and
+reaches roughly 82-92% of all-MiniLM-L6-v2's quality (see the
+[Model2Vec results](https://github.com/MinishLab/model2vec/blob/main/results/README.md)).
 
-## Usage
+This repository implements that inference path in Zig for the potion model
+family, plus quantization tooling. It targets programs that want semantic
+similarity without operating a model server: CLI tools, agent hooks, daemons,
+and anything that ships as a static binary.
 
-Models load straight from their HuggingFace layout: a directory containing
+## Models
+
+Models load directly from their HuggingFace layout: a directory containing
 `tokenizer.json`, `model.safetensors`, and `config.json`.
 
+| Model | Dimensions | Disk | Notes |
+|---|---|---|---|
+| [potion-base-2M](https://huggingface.co/minishlab/potion-base-2M) | 64 | ~8 MB | smallest |
+| [potion-base-8M](https://huggingface.co/minishlab/potion-base-8M) | 256 | ~30 MB | fetch-model.sh default; benchmarked here |
+| [potion-retrieval-32M](https://huggingface.co/minishlab/potion-retrieval-32M) | 512 | ~125 MB | tuned for retrieval |
+
+## Quantization
+
+`m2v-quantize` converts a published f32 model:
+
 ```bash
-./scripts/fetch-model.sh potion-base-8M
+m2v-quantize model.safetensors model.i8.safetensors        # i8, 4x smaller
+m2v-quantize --tq4 model.safetensors model.tq4.safetensors # 4-bit, 8x smaller
 ```
 
-| model | dim | disk | notes |
-|---|---|---|---|
-| potion-base-2M | 64 | ~8 MB | smallest |
-| potion-base-8M | 256 | ~30 MB | fetch-model.sh default; benchmarked below |
-| potion-retrieval-32M | 512 | ~125 MB | tuned for retrieval |
+The i8 scheme is the reference implementation's: output is byte-identical to
+a Python-quantized model, and pooling uses the raw i8 values because the
+global scale cancels under L2 normalization.
 
-`Model.embed` allocates the output vector; `Model.embedInto` writes into a
-caller-owned buffer and only uses its allocator for tokenization scratch, so
-an arena reset between calls embeds with no per-call heap growth. The model is
-read-only after load; concurrent embeds are fine if each call has its own
-allocator.
+The 4-bit format follows the TurboQuant recipe: rows are rotated by a fixed
+random orthonormal matrix, which makes uniform scalar quantization
+near-optimal, then stored as signed nibbles with one f32 scale per row. The
+rotation is never stored; cosine similarity is rotation-invariant and queries
+pool from the same matrix. Vectors from a tq4 model are only comparable
+within that quantized artifact, so persist them keyed to
+`Model.fingerprint()`.
 
-## Scope
+Measured quality, on the 10 retrieval tasks of MTEB(eng, v2) with
+potion-retrieval-32M, using a harness that reproduces MinishLab's published
+per-task scores on 9 of 10 tasks to five decimals:
 
-This runs the potion family, not every model on the Hub:
+| Format | Matrix size | Mean NDCG@10 |
+|---|---|---|
+| f32 | 129 MB | 0.35061 |
+| i8 | 32 MB | 0.35019 |
+| tq4 | 16.4 MB | 0.34861 |
 
-- WordPiece tokenizers only. BPE and Unigram models are rejected at load.
-- F32 and I8 safetensors; f16 is not read yet. I8 models keep the quantized
-  matrix in memory (4x smaller) and pool the raw values, which matches the
-  reference because the global scale cancels under L2 normalization. The
-  bundled `m2v-quantize` tool converts an f32 model to i8 with output
-  byte-identical to the reference implementation's quantizer; embedding drift
-  from quantization measures ~0.9997 cosine.
-- A TurboQuant-style 4-bit format (`m2v-quantize --tq4`): rows are rotated by
-  a fixed random orthonormal matrix (which makes uniform scalar quantization
-  near-optimal), stored as signed nibbles with one scale per row, 8x smaller
-  than f32. The rotation is never stored or undone; cosine is rotation
-  invariant and queries pool from the same matrix, so only similarity
-  structure is preserved, not coordinates. Vectors from a tq4 model are not
-  comparable with any other build of the same model; persist them keyed to
-  `Model.fingerprint()`. On the MTEB(eng, v2) retrieval suite, tq4 scores
-  34.86 mean NDCG@10 against 35.06 for f32 (i8: 35.02). The reasoning and
-  full measurements are in [docs/turboquant.md](docs/turboquant.md).
-- The normalizer folds Latin accents with a table instead of full Unicode NFD
-  (Zig's std has no normalization). Latin-script and code text matches the
-  reference exactly; other scripts pass through unfolded and may tokenize to
-  [UNK] where the reference would not.
+The reasoning and full per-task results are in
+[docs/turboquant.md](docs/turboquant.md).
 
-Measured per format on potion-base-8M (same text and machine as above):
+## Performance
 
-| format | matrix on disk | quality vs f32 | embed |
-|---|---|---|---|
-| f32 | 30.2 MB | exact | 4.2 us |
-| i8 | 7.6 MB | ~0.9997 cosine | 4.8 us |
-| tq4 | 3.9 MB | similarity drift < 0.05 | 4.8 us |
+Per format on potion-base-8M, same machine and text as above:
+
+| Format | Matrix on disk | Embed |
+|---|---|---|
+| f32 | 30.2 MB | 4.2 us |
+| i8 | 7.6 MB | 4.8 us |
+| tq4 | 3.9 MB | 4.8 us |
+
+The model is read-only after load; concurrent embeds are safe if each call
+has its own scratch allocator. `zig build bench` reproduces the numbers.
+
+## Limitations
+
+- WordPiece tokenizers only, which covers the potion family. BPE and Unigram
+  models are rejected at load.
+- F32 and I8 safetensors are read; f16 is not.
+- The normalizer folds Latin accents with a table instead of full Unicode
+  NFD (Zig's std has no normalization). Latin-script and code text matches
+  the reference exactly; other scripts pass through unfolded and may
+  tokenize to [UNK] where the reference would not.
+- Single-text API. There is no batch interface; for batch workloads use the
+  [Python](https://github.com/MinishLab/model2vec) or
+  [Rust](https://github.com/MinishLab/model2vec-rs) implementations.
 
 ## Testing
 
@@ -99,9 +145,22 @@ Measured per format on potion-base-8M (same text and machine as above):
 and the pooling math against handcrafted fixtures. When a model is present
 under `models/potion-base-8M`, it also runs a parity test: ten texts covering
 accents, emoji, identifiers, and overlong words, compared against vectors
-produced by the Python reference implementation. Max absolute difference is
-under 1e-5. `zig build bench` prints embed throughput.
+produced by the Python reference implementation, with a maximum absolute
+difference under 1e-5.
 
 ## License
 
 MIT. The potion models are MinishLab's, also MIT.
+
+## Citation
+
+If you use this library in research, cite Model2Vec:
+
+```bibtex
+@software{minishlab2024model2vec,
+  authors = {Stephan Tulkens, Thomas van Dongen},
+  title = {Model2Vec: Turn any Sentence Transformer into a Small Fast Model},
+  year = {2024},
+  url = {https://github.com/MinishLab/model2vec}
+}
+```
