@@ -14,9 +14,10 @@
 //!
 //! Why 4-bit and not 3: measured on potion-retrieval-32M, 4-bit keeps row
 //! reconstruction at ~0.993 cosine (3-bit: ~0.973) for one extra bit per
-//! coordinate, and nibbles pack two per byte without bit-spanning. Retrieval
-//! ranks were unchanged at either width, but downstream cosine thresholds
-//! (duplicate detection, relevance floors) appreciate the tighter noise.
+//! coordinate, and nibbles pack two per byte without bit-spanning. On the
+//! MTEB(eng, v2) retrieval suite, 4-bit costs 0.0020 mean NDCG@10 against
+//! f32 (docs/turboquant.md); downstream cosine thresholds (duplicate
+//! detection, relevance floors) also depend on the tighter per-row noise.
 
 const std = @import("std");
 

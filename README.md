@@ -20,20 +20,20 @@ Measured on potion-base-8M (x86_64 Linux, ReleaseFast): 4.1 us per embed of a
 Ollama round trip for the same job is 20-30 ms, and a cold one is seconds.
 
 The bundled quantizer cuts that further: a TurboQuant-style 4-bit format runs
-the 129 MB retrieval-tuned model from a 16 MB matrix at the same speed, with
-measured similarity drift under 0.05. Why static embedders compress this well
-is written up in [docs/turboquant.md](docs/turboquant.md).
+the 129 MB retrieval-tuned model from a 16 MB matrix at the same speed. On
+the 10 retrieval tasks of MTEB(eng, v2) it scores 34.86 mean NDCG@10 against
+35.06 for f32, measured on a harness that reproduces MinishLab's published
+per-task scores. Why static embedders compress this well is written up in
+[docs/turboquant.md](docs/turboquant.md).
 
 ## Why
 
 Plenty of programs want semantic similarity but can't justify a model server:
 CLI tools, agent hooks that run on every prompt, daemons that should work
-offline on first run. Static embeddings make that trade explicit: you get
-roughly 82-92% of all-MiniLM-L6-v2's quality (see the
+offline on first run. Static embeddings make that trade explicit: roughly
+82-92% of all-MiniLM-L6-v2's quality (see the
 [model2vec results](https://github.com/MinishLab/model2vec/blob/main/results/README.md))
-at microsecond latency with zero dependencies. For small corpora of short
-texts, especially paired with lexical search, that is usually the right side
-of the trade.
+at microsecond latency with zero dependencies.
 
 Pair it with a vector index and you have local semantic search inside one
 static binary.
@@ -50,7 +50,7 @@ Models load straight from their HuggingFace layout: a directory containing
 | model | dim | disk | notes |
 |---|---|---|---|
 | potion-base-2M | 64 | ~8 MB | smallest |
-| potion-base-8M | 256 | ~30 MB | good default |
+| potion-base-8M | 256 | ~30 MB | fetch-model.sh default; benchmarked below |
 | potion-retrieval-32M | 512 | ~125 MB | tuned for retrieval |
 
 `Model.embed` allocates the output vector; `Model.embedInto` writes into a
@@ -77,9 +77,9 @@ This runs the potion family, not every model on the Hub:
   invariant and queries pool from the same matrix, so only similarity
   structure is preserved, not coordinates. Vectors from a tq4 model are not
   comparable with any other build of the same model; persist them keyed to
-  `Model.fingerprint()`. Pairwise similarity drift measures under 0.05
-  against f32 on the test texts. The reasoning and full measurements are in
-  [docs/turboquant.md](docs/turboquant.md).
+  `Model.fingerprint()`. On the MTEB(eng, v2) retrieval suite, tq4 scores
+  34.86 mean NDCG@10 against 35.06 for f32 (i8: 35.02). The reasoning and
+  full measurements are in [docs/turboquant.md](docs/turboquant.md).
 - The normalizer folds Latin accents with a table instead of full Unicode NFD
   (Zig's std has no normalization). Latin-script and code text matches the
   reference exactly; other scripts pass through unfolded and may tokenize to

@@ -1,0 +1,140 @@
+{
+ "published": {
+  "ArguAna": 0.44878,
+  "CQADupstackGamingRetrieval": 0.38125,
+  "CQADupstackUnixRetrieval": 0.19771,
+  "ClimateFEVERHardNegatives": 0.23433,
+  "FEVERHardNegatives": 0.46266,
+  "FiQA2018": 0.18761,
+  "HotpotQAHardNegatives": 0.50085,
+  "SCIDOCS": 0.13693,
+  "TRECCOVID": 0.4469,
+  "Touche2020Retrieval.v3": 0.50905
+ },
+ "f32": {
+  "ArguAna": {
+   "ndcg_at_10": 0.44878,
+   "recall_at_100": 0.95946
+  },
+  "CQADupstackGamingRetrieval": {
+   "ndcg_at_10": 0.38125,
+   "recall_at_100": 0.73595
+  },
+  "CQADupstackUnixRetrieval": {
+   "ndcg_at_10": 0.19771,
+   "recall_at_100": 0.47091
+  },
+  "ClimateFEVERHardNegatives": {
+   "ndcg_at_10": 0.23439,
+   "recall_at_100": 0.58733
+  },
+  "FEVERHardNegatives": {
+   "ndcg_at_10": 0.46266,
+   "recall_at_100": 0.92501
+  },
+  "FiQA2018": {
+   "ndcg_at_10": 0.18761,
+   "recall_at_100": 0.48427
+  },
+  "HotpotQAHardNegatives": {
+   "ndcg_at_10": 0.50085,
+   "recall_at_100": 0.7985
+  },
+  "SCIDOCS": {
+   "ndcg_at_10": 0.13693,
+   "recall_at_100": 0.34143
+  },
+  "TRECCOVID": {
+   "ndcg_at_10": 0.4469,
+   "recall_at_100": 0.07473
+  },
+  "Touche2020Retrieval.v3": {
+   "ndcg_at_10": 0.50905,
+   "recall_at_100": 0.54742
+  }
+ },
+ "i8": {
+  "ArguAna": {
+   "ndcg_at_10": 0.44833,
+   "recall_at_100": 0.96017
+  },
+  "CQADupstackGamingRetrieval": {
+   "ndcg_at_10": 0.38061,
+   "recall_at_100": 0.73509
+  },
+  "CQADupstackUnixRetrieval": {
+   "ndcg_at_10": 0.19725,
+   "recall_at_100": 0.46964
+  },
+  "ClimateFEVERHardNegatives": {
+   "ndcg_at_10": 0.2345,
+   "recall_at_100": 0.58733
+  },
+  "FEVERHardNegatives": {
+   "ndcg_at_10": 0.4635,
+   "recall_at_100": 0.92351
+  },
+  "FiQA2018": {
+   "ndcg_at_10": 0.18747,
+   "recall_at_100": 0.48363
+  },
+  "HotpotQAHardNegatives": {
+   "ndcg_at_10": 0.49993,
+   "recall_at_100": 0.797
+  },
+  "SCIDOCS": {
+   "ndcg_at_10": 0.13691,
+   "recall_at_100": 0.34143
+  },
+  "TRECCOVID": {
+   "ndcg_at_10": 0.44274,
+   "recall_at_100": 0.07405
+  },
+  "Touche2020Retrieval.v3": {
+   "ndcg_at_10": 0.51068,
+   "recall_at_100": 0.54815
+  }
+ },
+ "tq4": {
+  "ArguAna": {
+   "ndcg_at_10": 0.44666,
+   "recall_at_100": 0.9623
+  },
+  "CQADupstackGamingRetrieval": {
+   "ndcg_at_10": 0.38074,
+   "recall_at_100": 0.73516
+  },
+  "CQADupstackUnixRetrieval": {
+   "ndcg_at_10": 0.19501,
+   "recall_at_100": 0.47184
+  },
+  "ClimateFEVERHardNegatives": {
+   "ndcg_at_10": 0.23278,
+   "recall_at_100": 0.58638
+  },
+  "FEVERHardNegatives": {
+   "ndcg_at_10": 0.46003,
+   "recall_at_100": 0.92651
+  },
+  "FiQA2018": {
+   "ndcg_at_10": 0.18835,
+   "recall_at_100": 0.48243
+  },
+  "HotpotQAHardNegatives": {
+   "ndcg_at_10": 0.50211,
+   "recall_at_100": 0.7975
+  },
+  "SCIDOCS": {
+   "ndcg_at_10": 0.13671,
+   "recall_at_100": 0.34133
+  },
+  "TRECCOVID": {
+   "ndcg_at_10": 0.43768,
+   "recall_at_100": 0.07332
+  },
+  "Touche2020Retrieval.v3": {
+   "ndcg_at_10": 0.50601,
+   "recall_at_100": 0.54999
+  }
+ }
+}
