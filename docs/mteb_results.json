@@ -1,140 +1,233 @@
 {
- "published": {
-  "ArguAna": 0.44878,
-  "CQADupstackGamingRetrieval": 0.38125,
-  "CQADupstackUnixRetrieval": 0.19771,
-  "ClimateFEVERHardNegatives": 0.23433,
-  "FEVERHardNegatives": 0.46266,
-  "FiQA2018": 0.18761,
-  "HotpotQAHardNegatives": 0.50085,
-  "SCIDOCS": 0.13693,
-  "TRECCOVID": 0.4469,
-  "Touche2020Retrieval.v3": 0.50905
- },
- "f32": {
-  "ArguAna": {
-   "ndcg_at_10": 0.44878,
-   "recall_at_100": 0.95946
+ "note": "potion-base-8M published STS17 and STS22.v2 are from a multilingual run (all language subsets averaged) and are not comparable to the MTEB(eng, v2) English-restricted protocol used for every other number.",
+ "main_scores": {
+  "potion-retrieval-32M/retrieval/ArguAna": {
+   "published": 0.44878,
+   "f32": 0.44878,
+   "i8": 0.44833,
+   "tq4": 0.44666
   },
-  "CQADupstackGamingRetrieval": {
-   "ndcg_at_10": 0.38125,
-   "recall_at_100": 0.73595
+  "potion-retrieval-32M/retrieval/CQADupstackGamingRetrieval": {
+   "published": 0.38125,
+   "f32": 0.38125,
+   "i8": 0.38061,
+   "tq4": 0.38074
   },
-  "CQADupstackUnixRetrieval": {
-   "ndcg_at_10": 0.19771,
-   "recall_at_100": 0.47091
+  "potion-retrieval-32M/retrieval/CQADupstackUnixRetrieval": {
+   "published": 0.19771,
+   "f32": 0.19771,
+   "i8": 0.19725,
+   "tq4": 0.19501
   },
-  "ClimateFEVERHardNegatives": {
-   "ndcg_at_10": 0.23439,
-   "recall_at_100": 0.58733
+  "potion-retrieval-32M/retrieval/ClimateFEVERHardNegatives": {
+   "published": 0.23433,
+   "f32": 0.23439,
+   "i8": 0.2345,
+   "tq4": 0.23278
   },
-  "FEVERHardNegatives": {
-   "ndcg_at_10": 0.46266,
-   "recall_at_100": 0.92501
+  "potion-retrieval-32M/retrieval/FEVERHardNegatives": {
+   "published": 0.46266,
+   "f32": 0.46266,
+   "i8": 0.4635,
+   "tq4": 0.46003
   },
-  "FiQA2018": {
-   "ndcg_at_10": 0.18761,
-   "recall_at_100": 0.48427
+  "potion-retrieval-32M/retrieval/FiQA2018": {
+   "published": 0.18761,
+   "f32": 0.18761,
+   "i8": 0.18747,
+   "tq4": 0.18835
   },
-  "HotpotQAHardNegatives": {
-   "ndcg_at_10": 0.50085,
-   "recall_at_100": 0.7985
+  "potion-retrieval-32M/retrieval/HotpotQAHardNegatives": {
+   "published": 0.50085,
+   "f32": 0.50085,
+   "i8": 0.49993,
+   "tq4": 0.50211
   },
-  "SCIDOCS": {
-   "ndcg_at_10": 0.13693,
-   "recall_at_100": 0.34143
+  "potion-retrieval-32M/retrieval/SCIDOCS": {
+   "published": 0.13693,
+   "f32": 0.13693,
+   "i8": 0.13691,
+   "tq4": 0.13671
   },
-  "TRECCOVID": {
-   "ndcg_at_10": 0.4469,
-   "recall_at_100": 0.07473
+  "potion-retrieval-32M/retrieval/TRECCOVID": {
+   "published": 0.4469,
+   "f32": 0.4469,
+   "i8": 0.44274,
+   "tq4": 0.43768
   },
-  "Touche2020Retrieval.v3": {
-   "ndcg_at_10": 0.50905,
-   "recall_at_100": 0.54742
-  }
- },
- "i8": {
-  "ArguAna": {
-   "ndcg_at_10": 0.44833,
-   "recall_at_100": 0.96017
+  "potion-retrieval-32M/retrieval/Touche2020Retrieval.v3": {
+   "published": 0.50905,
+   "f32": 0.50905,
+   "i8": 0.51068,
+   "tq4": 0.50601
   },
-  "CQADupstackGamingRetrieval": {
-   "ndcg_at_10": 0.38061,
-   "recall_at_100": 0.73509
+  "potion-retrieval-32M/sts/BIOSSES": {
+   "published": 0.787801,
+   "f32": 0.787801,
+   "i8": 0.7891505114502271,
+   "tq4": 0.7840901551827213
   },
-  "CQADupstackUnixRetrieval": {
-   "ndcg_at_10": 0.19725,
-   "recall_at_100": 0.46964
+  "potion-retrieval-32M/sts/SICK-R": {
+   "published": 0.66508,
+   "f32": 0.6650799024977331,
+   "i8": 0.6652684429669798,
+   "tq4": 0.6643875796289118
   },
-  "ClimateFEVERHardNegatives": {
-   "ndcg_at_10": 0.2345,
-   "recall_at_100": 0.58733
+  "potion-retrieval-32M/sts/STS12": {
+   "published": 0.613784,
+   "f32": 0.6137696807763029,
+   "i8": 0.6137327290328214,
+   "tq4": 0.6126061780568357
   },
-  "FEVERHardNegatives": {
-   "ndcg_at_10": 0.4635,
-   "recall_at_100": 0.92351
+  "potion-retrieval-32M/sts/STS13": {
+   "published": 0.73606,
+   "f32": 0.7360599547837331,
+   "i8": 0.7356787160837707,
+   "tq4": 0.7372336584891512
   },
-  "FiQA2018": {
-   "ndcg_at_10": 0.18747,
-   "recall_at_100": 0.48363
+  "potion-retrieval-32M/sts/STS14": {
+   "published": 0.704635,
+   "f32": 0.7046349821171903,
+   "i8": 0.7046158972011294,
+   "tq4": 0.7045074097244721
   },
-  "HotpotQAHardNegatives": {
-   "ndcg_at_10": 0.49993,
-   "recall_at_100": 0.797
+  "potion-retrieval-32M/sts/STS15": {
+   "published": 0.811203,
+   "f32": 0.8112029312580978,
+   "i8": 0.8112414370503859,
+   "tq4": 0.8107812682958897
   },
-  "SCIDOCS": {
-   "ndcg_at_10": 0.13691,
-   "recall_at_100": 0.34143
+  "potion-retrieval-32M/sts/STS17": {
+   "published": 0.861128,
+   "f32": 0.861127844491644,
+   "i8": 0.8614299801807882,
+   "tq4": 0.8601530148381207
   },
-  "TRECCOVID": {
-   "ndcg_at_10": 0.44274,
-   "recall_at_100": 0.07405
+  "potion-retrieval-32M/sts/STS22.v2": {
+   "published": 0.676576,
+   "f32": 0.6765763033802662,
+   "i8": 0.6764761980224577,
+   "tq4": 0.6775561964762117
   },
-  "Touche2020Retrieval.v3": {
-   "ndcg_at_10": 0.51068,
-   "recall_at_100": 0.54815
-  }
- },
- "tq4": {
-  "ArguAna": {
-   "ndcg_at_10": 0.44666,
-   "recall_at_100": 0.9623
+  "potion-retrieval-32M/sts/STSBenchmark": {
+   "published": 0.740959,
+   "f32": 0.7409587217376201,
+   "i8": 0.7411280224932966,
+   "tq4": 0.7410965297370573
   },
-  "CQADupstackGamingRetrieval": {
-   "ndcg_at_10": 0.38074,
-   "recall_at_100": 0.73516
+  "potion-base-8M/retrieval/ArguAna": {
+   "published": 0.41966000000000003,
+   "f32": 0.41961,
+   "i8": 0.41947,
+   "tq4": 0.42147
   },
-  "CQADupstackUnixRetrieval": {
-   "ndcg_at_10": 0.19501,
-   "recall_at_100": 0.47184
+  "potion-base-8M/retrieval/CQADupstackGamingRetrieval": {
+   "published": 0.39235,
+   "f32": 0.39235,
+   "i8": 0.39212,
+   "tq4": 0.39253
   },
-  "ClimateFEVERHardNegatives": {
-   "ndcg_at_10": 0.23278,
-   "recall_at_100": 0.58638
+  "potion-base-8M/retrieval/CQADupstackUnixRetrieval": {
+   "published": 0.20061999999999997,
+   "f32": 0.20062,
+   "i8": 0.19918,
+   "tq4": 0.19761
   },
-  "FEVERHardNegatives": {
-   "ndcg_at_10": 0.46003,
-   "recall_at_100": 0.92651
+  "potion-base-8M/retrieval/ClimateFEVERHardNegatives": {
+   "published": 0.18724,
+   "f32": 0.18724,
+   "i8": 0.18703,
+   "tq4": 0.18982
   },
-  "FiQA2018": {
-   "ndcg_at_10": 0.18835,
-   "recall_at_100": 0.48243
+  "potion-base-8M/retrieval/FEVERHardNegatives": {
+   "published": 0.33518,
+   "f32": 0.33518,
+   "i8": 0.33564,
+   "tq4": 0.33636
   },
-  "HotpotQAHardNegatives": {
-   "ndcg_at_10": 0.50211,
-   "recall_at_100": 0.7975
+  "potion-base-8M/retrieval/FiQA2018": {
+   "published": 0.16619,
+   "f32": 0.16619,
+   "i8": 0.16547,
+   "tq4": 0.16507
   },
-  "SCIDOCS": {
-   "ndcg_at_10": 0.13671,
-   "recall_at_100": 0.34133
+  "potion-base-8M/retrieval/HotpotQAHardNegatives": {
+   "published": 0.3904,
+   "f32": 0.3904,
+   "i8": 0.39021,
+   "tq4": 0.39185
   },
-  "TRECCOVID": {
-   "ndcg_at_10": 0.43768,
-   "recall_at_100": 0.07332
+  "potion-base-8M/retrieval/SCIDOCS": {
+   "published": 0.12386999999999998,
+   "f32": 0.12387,
+   "i8": 0.12298,
+   "tq4": 0.12402
   },
-  "Touche2020Retrieval.v3": {
-   "ndcg_at_10": 0.50601,
-   "recall_at_100": 0.54999
+  "potion-base-8M/retrieval/TRECCOVID": {
+   "published": 0.45747,
+   "f32": 0.45744,
+   "i8": 0.45902,
+   "tq4": 0.45217
+  },
+  "potion-base-8M/retrieval/Touche2020Retrieval.v3": {
+   "published": 0.43816,
+   "f32": 0.43816,
+   "i8": 0.43843,
+   "tq4": 0.43685
+  },
+  "potion-base-8M/sts/BIOSSES": {
+   "published": 0.7585775256673795,
+   "f32": 0.7585775256673795,
+   "i8": 0.7585534287327722,
+   "tq4": 0.7571437580582528
+  },
+  "potion-base-8M/sts/SICK-R": {
+   "published": 0.646753400763881,
+   "f32": 0.6467529822790183,
+   "i8": 0.6469811320154741,
+   "tq4": 0.6463539081113715
+  },
+  "potion-base-8M/sts/STS12": {
+   "published": 0.6224898505553053,
+   "f32": 0.6224750642586641,
+   "i8": 0.6227497945992428,
+   "tq4": 0.621744499020661
+  },
+  "potion-base-8M/sts/STS13": {
+   "published": 0.7727600787572996,
+   "f32": 0.772760080817994,
+   "i8": 0.7726012792570406,
+   "tq4": 0.7726067813740772
+  },
+  "potion-base-8M/sts/STS14": {
+   "published": 0.71914099628002,
+   "f32": 0.7191409062241355,
+   "i8": 0.7191840830701114,
+   "tq4": 0.7188536025047452
+  },
+  "potion-base-8M/sts/STS15": {
+   "published": 0.7975345871163103,
+   "f32": 0.7975345017876988,
+   "i8": 0.7976226550973955,
+   "tq4": 0.7977859747289866
+  },
+  "potion-base-8M/sts/STS17": {
+   "published": 0.14729958484232528,
+   "f32": 0.8596709815630739,
+   "i8": 0.8602970554706353,
+   "tq4": 0.8591439738915516
+  },
+  "potion-base-8M/sts/STS22.v2": {
+   "published": 0.120883,
+   "f32": 0.6307956002739231,
+   "i8": 0.6310910331591625,
+   "tq4": 0.6314271592792835
+  },
+  "potion-base-8M/sts/STSBenchmark": {
+   "published": 0.7540519061413277,
+   "f32": 0.754051305973876,
+   "i8": 0.754320872521596,
+   "tq4": 0.7540349053137728
   }
  }
 }

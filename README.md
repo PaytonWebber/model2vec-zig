@@ -100,17 +100,18 @@ pool from the same matrix. Vectors from a tq4 model are only comparable
 within that quantized artifact, so persist them keyed to
 `Model.fingerprint()`.
 
-Measured quality, on the 10 retrieval tasks of MTEB(eng, v2) with
-potion-retrieval-32M, using a harness that reproduces MinishLab's published
-per-task scores on 9 of 10 tasks to five decimals:
+Measured quality on MTEB(eng, v2) with potion-retrieval-32M, using a harness
+that reproduces MinishLab's published per-task scores (9 of 10 retrieval
+tasks and 8 of 9 STS tasks match exactly):
 
-| Format | Matrix size | Mean NDCG@10 |
-|---|---|---|
-| f32 | 129 MB | 0.35061 |
-| i8 | 32 MB | 0.35019 |
-| tq4 | 16.4 MB | 0.34861 |
+| Format | Matrix size | Retrieval (mean NDCG@10) | STS (mean Spearman) |
+|---|---|---|---|
+| f32 | 129 MB | 0.35061 | 0.73302 |
+| i8 | 32 MB | 0.35019 | 0.73319 |
+| tq4 | 16.4 MB | 0.34861 | 0.73249 |
 
-The reasoning and full per-task results are in
+The same comparison on potion-base-8M measures tq4 within 0.0004 of f32 on
+both suites. The reasoning and full per-task results are in
 [docs/turboquant.md](docs/turboquant.md).
 
 ## Performance
