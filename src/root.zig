@@ -19,6 +19,7 @@ const std = @import("std");
 pub const safetensors = @import("safetensors.zig");
 pub const tokenizer = @import("tokenizer.zig");
 pub const accents = @import("accents.zig");
+pub const tq = @import("tq.zig");
 
 pub const Tokenizer = tokenizer.Tokenizer;
 
@@ -121,6 +122,7 @@ pub const Model = struct {
         const used = switch (self.embeddings) {
             .f32_data => |m| self.pool(f32, m, ids.items, out),
             .i8_data => |m| self.pool(i8, m, ids.items, out),
+            .tq4_data => |m| self.poolTq4(m, ids.items, out),
         };
         if (used == 0) return; // no known tokens: zero vector, like the reference
 
@@ -135,6 +137,51 @@ pub const Model = struct {
                 for (out) |*o| o.* *= inv_norm;
             }
         }
+    }
+
+    fn poolTq4(self: *const Model, matrix: safetensors.Matrix.Tq4, ids: []const u32, out: []f32) usize {
+        const half = self.dim / 2;
+        var used: usize = 0;
+        for (ids) |id| {
+            if (id == self.tok.unk_id) continue;
+            if (used == self.max_tokens) break;
+            if (id >= self.rows) continue;
+            const row = matrix.packed_data[@as(usize, id) * half ..][0..half];
+            const scale = matrix.scales[id];
+            for (row, 0..) |b, i| {
+                const pair = tq.unpackByte(b);
+                out[i * 2] += scale * @as(f32, @floatFromInt(pair.lo));
+                out[i * 2 + 1] += scale * @as(f32, @floatFromInt(pair.hi));
+            }
+            used += 1;
+        }
+        return used;
+    }
+
+    /// Identifies the exact matrix a model will produce vectors in: dtype,
+    /// shape, and a content hash. Vectors persisted by a consumer are only
+    /// comparable when this matches; tq4 models in particular live in a
+    /// rotated basis that no other quantization of the same model shares.
+    pub fn fingerprint(self: *const Model) u64 {
+        var h = std.hash.Wyhash.init(0);
+        h.update(std.mem.asBytes(&self.rows));
+        h.update(std.mem.asBytes(&self.dim));
+        switch (self.embeddings) {
+            .f32_data => |m| {
+                h.update("f32");
+                h.update(std.mem.sliceAsBytes(m[0..@min(m.len, 4096)]));
+            },
+            .i8_data => |m| {
+                h.update("i8");
+                h.update(std.mem.sliceAsBytes(m[0..@min(m.len, 4096)]));
+            },
+            .tq4_data => |m| {
+                h.update("tq4");
+                h.update(m.packed_data[0..@min(m.packed_data.len, 4096)]);
+                h.update(std.mem.sliceAsBytes(m.scales[0..@min(m.scales.len, 1024)]));
+            },
+        }
+        return h.final();
     }
 
     fn pool(self: *const Model, comptime T: type, matrix: []const T, ids: []const u32, out: []f32) usize {
@@ -180,6 +227,7 @@ const testing = std.testing;
 test {
     testing.refAllDecls(@This());
     _ = @import("quantize.zig");
+    _ = @import("tq.zig");
 }
 
 test "truncateChars respects codepoint boundaries" {
@@ -197,6 +245,63 @@ test "matches reference embeddings for potion-base-8M" {
 
 test "matches reference embeddings for the i8-quantized model" {
     try parityCheck("models/potion-base-8M-i8", "testdata/golden_i8.json");
+}
+
+// tq4 vectors live in a rotated basis, so coordinates cannot be compared to
+// the reference. What consumers rely on is similarity structure: every
+// pairwise cosine between texts must survive quantization.
+test "tq4 preserves pairwise similarities" {
+    const f32_dir = "models/potion-base-8M";
+    const tq4_dir = "models/potion-base-8M-tq4";
+    std.Io.Dir.cwd().access(testing.io, f32_dir ++ "/model.safetensors", .{}) catch return error.SkipZigTest;
+    std.Io.Dir.cwd().access(testing.io, tq4_dir ++ "/model.safetensors", .{}) catch return error.SkipZigTest;
+
+    var mf = try Model.load(testing.allocator, testing.io, f32_dir);
+    defer mf.deinit();
+    var mq = try Model.load(testing.allocator, testing.io, tq4_dir);
+    defer mq.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const golden_bytes = try std.Io.Dir.cwd().readFileAlloc(testing.io, "testdata/golden.json", a, .limited(16 * 1024 * 1024));
+    const golden = try std.json.parseFromSliceLeaky(std.json.Value, a, golden_bytes, .{});
+
+    var vf: std.ArrayList([]f32) = .empty;
+    var vq: std.ArrayList([]f32) = .empty;
+    for (golden.array.items) |case| {
+        const text = case.object.get("text").?.string;
+        try vf.append(a, try mf.embed(a, text));
+        try vq.append(a, try mq.embed(a, text));
+    }
+
+    var max_dev: f64 = 0;
+    for (0..vf.items.len) |i| {
+        for (i + 1..vf.items.len) |j| {
+            const cf = pairDot(vf.items[i], vf.items[j]);
+            const cq = pairDot(vq.items[i], vq.items[j]);
+            // Zero vectors (empty text, all-UNK) have meaningless cosines.
+            if (pairNorm(vf.items[i]) == 0 or pairNorm(vf.items[j]) == 0) continue;
+            max_dev = @max(max_dev, @abs(cf - cq));
+        }
+    }
+    // 4-bit row reconstruction is ~0.993 cosine; pairwise similarities of
+    // pooled vectors should deviate well under 0.05.
+    if (max_dev > 0.05) {
+        std.debug.print("tq4 similarity deviation too large: {d}\n", .{max_dev});
+        return error.SimilarityDrift;
+    }
+}
+
+fn pairDot(x: []const f32, y: []const f32) f64 {
+    var sum: f64 = 0;
+    for (x, y) |p, q| sum += @as(f64, p) * q;
+    return sum;
+}
+
+fn pairNorm(x: []const f32) f64 {
+    return @sqrt(pairDot(x, x));
 }
 
 fn parityCheck(comptime model_dir: []const u8, comptime golden_path: []const u8) !void {

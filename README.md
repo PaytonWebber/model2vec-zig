@@ -65,6 +65,23 @@ This runs the potion family, not every model on the Hub:
   bundled `m2v-quantize` tool converts an f32 model to i8 with output
   byte-identical to the reference implementation's quantizer; embedding drift
   from quantization measures ~0.9997 cosine.
+- A TurboQuant-style 4-bit format (`m2v-quantize --tq4`): rows are rotated by
+  a fixed random orthonormal matrix (which makes uniform scalar quantization
+  near-optimal), stored as signed nibbles with one scale per row, 8x smaller
+  than f32. The rotation is never stored or undone; cosine is rotation
+  invariant and queries pool from the same matrix, so only similarity
+  structure is preserved, not coordinates. Vectors from a tq4 model are not
+  comparable with any other build of the same model; persist them keyed to
+  `Model.fingerprint()`. Pairwise similarity drift measures under 0.05
+  against f32 on the test texts.
+
+Measured per format on potion-base-8M (same text and machine as above):
+
+| format | matrix on disk | quality vs f32 | embed |
+|---|---|---|---|
+| f32 | 30.2 MB | exact | 4.2 us |
+| i8 | 7.6 MB | ~0.9997 cosine | 4.8 us |
+| tq4 | 3.9 MB | similarity drift < 0.05 | 4.8 us |
 - The normalizer folds Latin accents with a table instead of full Unicode NFD
   (Zig's std has no normalization). Latin-script and code text matches the
   reference exactly; other scripts pass through unfolded and may tokenize to

@@ -11,7 +11,19 @@ pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const io = init.io;
 
-    var model = try m2v.Model.load(gpa, io, "models/potion-base-8M");
+    const dirs = [_][]const u8{
+        "models/potion-base-8M",
+        "models/potion-base-8M-i8",
+        "models/potion-base-8M-tq4",
+    };
+    for (dirs) |dir| {
+        std.Io.Dir.cwd().access(io, dir, .{}) catch continue;
+        try benchDir(gpa, io, dir);
+    }
+}
+
+fn benchDir(gpa: std.mem.Allocator, io: std.Io, dir: []const u8) !void {
+    var model = try m2v.Model.load(gpa, io, dir);
     defer model.deinit();
 
     var arena = std.heap.ArenaAllocator.init(gpa);
@@ -37,7 +49,8 @@ pub fn main(init: std.process.Init) !void {
     try model.tok.encode(arena.allocator(), text, &ids);
 
     const ns_per: f64 = @as(f64, @floatFromInt(elapsed_ns)) / iterations;
-    std.debug.print("{d} embeds of a {d}-token text: {d:.1} us/embed, {d:.0} embeds/s\n", .{
+    std.debug.print("{s}: {d} embeds of a {d}-token text: {d:.1} us/embed, {d:.0} embeds/s\n", .{
+        dir,
         iterations,
         ids.items.len,
         ns_per / 1000.0,

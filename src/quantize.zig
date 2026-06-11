@@ -1,19 +1,34 @@
-//! Quantize a model2vec f32 safetensors file to i8, matching the reference
-//! implementation's scheme exactly: one global scale of max(|x|)/127,
-//! round-half-to-even (numpy's rint), clip to [-127, 127]. The scale is not
-//! stored; it cancels under the L2 normalization the models apply, so
-//! inference pools the raw i8 values.
+//! Quantize a model2vec f32 safetensors file.
+//!
+//! Default mode is i8, matching the reference implementation's scheme
+//! exactly: one global scale of max(|x|)/127, round-half-to-even (numpy's
+//! rint), clip to [-127, 127]. The scale is not stored; it cancels under the
+//! L2 normalization the models apply, so inference pools the raw i8 values.
+//!
+//! --tq4 produces the TurboQuant-style 4-bit format instead (see tq.zig):
+//! 8x smaller than f32, ~0.993 row cosine, with the caveat that vectors live
+//! in a rotated basis unique to that quantization run's output.
 //!
 //!     m2v-quantize model.safetensors model.i8.safetensors
+//!     m2v-quantize --tq4 model.safetensors model.tq4.safetensors
 
 const std = @import("std");
 const safetensors = @import("safetensors.zig");
+const tq = @import("tq.zig");
+
+const tq_rotation_seed: u64 = 0x7A51_2026;
 
 pub fn main(init: std.process.Init) !void {
     var args_it = try std.process.Args.Iterator.initAllocator(init.minimal.args, init.gpa);
     defer args_it.deinit();
     _ = args_it.next(); // program name
-    const in_path = args_it.next() orelse return usage();
+    var first = args_it.next() orelse return usage();
+    var tq4 = false;
+    if (std.mem.eql(u8, first, "--tq4")) {
+        tq4 = true;
+        first = args_it.next() orelse return usage();
+    }
+    const in_path = first;
     const out_path = args_it.next() orelse return usage();
 
     var arena = std.heap.ArenaAllocator.init(init.gpa);
@@ -31,7 +46,20 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("{s} is already i8, nothing to do\n", .{in_path});
             return;
         },
+        .tq4_data => {
+            std.debug.print("{s} is already tq4, nothing to do\n", .{in_path});
+            return;
+        },
     };
+
+    if (tq4) {
+        const q = try tq.quantize(a, data, emb.rows, emb.cols, tq_rotation_seed);
+        try writeTq4Safetensors(a, io, out_path, q, emb.rows, emb.cols);
+        std.debug.print("wrote {s}: [{d}, {d}] tq4 ({d} bytes from {d})\n", .{
+            out_path, emb.rows, emb.cols, q.packed_data.len + q.scales.len * 4, data.len * 4,
+        });
+        return;
+    }
 
     const out = try quantize(a, data);
     try writeI8Safetensors(a, io, out_path, out, emb.rows, emb.cols);
@@ -87,8 +115,35 @@ fn writeI8Safetensors(a: std.mem.Allocator, io: std.Io, path: []const u8, data: 
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = out.items });
 }
 
+fn writeTq4Safetensors(a: std.mem.Allocator, io: std.Io, path: []const u8, q: tq.Quantized, rows: usize, cols: usize) !void {
+    const packed_len = q.packed_data.len;
+    const scales_len = q.scales.len * 4;
+    const header = try std.fmt.allocPrint(
+        a,
+        "{{\"embeddings_tq4\":{{\"dtype\":\"U8\",\"shape\":[{d},{d}],\"data_offsets\":[0,{d}]}}," ++
+            "\"scales\":{{\"dtype\":\"F32\",\"shape\":[{d}],\"data_offsets\":[{d},{d}]}}}}",
+        .{ rows, cols / 2, packed_len, rows, packed_len, packed_len + scales_len },
+    );
+    const padded_len = (header.len + 7) / 8 * 8;
+
+    var out: std.ArrayList(u8) = .empty;
+    var len_buf: [8]u8 = undefined;
+    std.mem.writeInt(u64, &len_buf, padded_len, .little);
+    try out.appendSlice(a, &len_buf);
+    try out.appendSlice(a, header);
+    try out.appendNTimes(a, ' ', padded_len - header.len);
+    try out.appendSlice(a, q.packed_data);
+    for (q.scales) |s| {
+        var sb: [4]u8 = undefined;
+        std.mem.writeInt(u32, &sb, @bitCast(s), .little);
+        try out.appendSlice(a, &sb);
+    }
+
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = out.items });
+}
+
 fn usage() error{BadUsage} {
-    std.debug.print("usage: m2v-quantize <in.safetensors> <out.safetensors>\n", .{});
+    std.debug.print("usage: m2v-quantize [--tq4] <in.safetensors> <out.safetensors>\n", .{});
     return error.BadUsage;
 }
 

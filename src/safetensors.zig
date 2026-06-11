@@ -24,11 +24,23 @@ pub const Error = error{
 pub const Matrix = union(enum) {
     f32_data: []f32,
     i8_data: []i8,
+    /// TurboQuant-style rotated 4-bit rows with one scale per row; see tq.zig.
+    tq4_data: Tq4,
+
+    pub const Tq4 = struct {
+        /// rows * cols/2 bytes, two signed nibbles per byte.
+        packed_data: []u8,
+        scales: []f32,
+    };
 
     pub fn deinit(self: Matrix, allocator: std.mem.Allocator) void {
         switch (self) {
             .f32_data => |d| allocator.free(d),
             .i8_data => |d| allocator.free(d),
+            .tq4_data => |t| {
+                allocator.free(t.packed_data);
+                allocator.free(t.scales);
+            },
         }
     }
 };
@@ -51,7 +63,12 @@ pub fn parse(allocator: std.mem.Allocator, bytes: []const u8) Error!Embeddings {
         return error.BadHeader;
     if (header != .object) return error.BadHeader;
 
-    const tensor = header.object.get("embeddings") orelse return error.MissingEmbeddings;
+    const tensor = header.object.get("embeddings") orelse {
+        if (header.object.get("embeddings_tq4")) |tq| {
+            return parseTq4(allocator, bytes, header, tq, header_len);
+        }
+        return error.MissingEmbeddings;
+    };
     if (tensor != .object) return error.BadHeader;
 
     const dtype = stringField(tensor, "dtype") orelse return error.BadHeader;
@@ -87,6 +104,51 @@ pub fn parse(allocator: std.mem.Allocator, bytes: []const u8) Error!Embeddings {
     errdefer allocator.free(data);
     for (data, raw) |*v, b| v.* = @bitCast(b);
     return .{ .matrix = .{ .i8_data = data }, .rows = rows, .cols = cols };
+}
+
+fn parseTq4(allocator: std.mem.Allocator, bytes: []const u8, header: std.json.Value, tq: std.json.Value, header_len: u64) Error!Embeddings {
+    if (tq != .object) return error.BadHeader;
+    const dtype = stringField(tq, "dtype") orelse return error.BadHeader;
+    if (!std.mem.eql(u8, dtype, "U8")) return error.UnsupportedDtype;
+
+    const shape = tq.object.get("shape") orelse return error.BadHeader;
+    if (shape != .array or shape.array.items.len != 2) return error.BadShape;
+    const rows = intField(shape.array.items[0]) orelse return error.BadShape;
+    const half_cols = intField(shape.array.items[1]) orelse return error.BadShape;
+
+    const data_start = 8 + header_len;
+    const packed_raw = tensorRegion(bytes, tq, data_start) orelse return error.TruncatedFile;
+    if (packed_raw.len != rows * half_cols) return error.BadShape;
+
+    const scales_tensor = header.object.get("scales") orelse return error.BadHeader;
+    if (scales_tensor != .object) return error.BadHeader;
+    const scales_dtype = stringField(scales_tensor, "dtype") orelse return error.BadHeader;
+    if (!std.mem.eql(u8, scales_dtype, "F32")) return error.UnsupportedDtype;
+    const scales_raw = tensorRegion(bytes, scales_tensor, data_start) orelse return error.TruncatedFile;
+    if (scales_raw.len != rows * 4) return error.BadShape;
+
+    const packed_data = try allocator.dupe(u8, packed_raw);
+    errdefer allocator.free(packed_data);
+    const scales = try allocator.alloc(f32, rows);
+    errdefer allocator.free(scales);
+    for (scales, 0..) |*s, i| {
+        s.* = @bitCast(std.mem.readInt(u32, scales_raw[i * 4 ..][0..4], .little));
+    }
+
+    return .{
+        .matrix = .{ .tq4_data = .{ .packed_data = packed_data, .scales = scales } },
+        .rows = rows,
+        .cols = half_cols * 2,
+    };
+}
+
+fn tensorRegion(bytes: []const u8, tensor: std.json.Value, data_start: u64) ?[]const u8 {
+    const offsets = tensor.object.get("data_offsets") orelse return null;
+    if (offsets != .array or offsets.array.items.len != 2) return null;
+    const begin = intField(offsets.array.items[0]) orelse return null;
+    const end = intField(offsets.array.items[1]) orelse return null;
+    if (end < begin or data_start + end > bytes.len) return null;
+    return bytes[data_start + begin .. data_start + end];
 }
 
 fn stringField(obj: std.json.Value, key: []const u8) ?[]const u8 {
