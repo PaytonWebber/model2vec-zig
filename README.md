@@ -1,8 +1,14 @@
 # model2vec-zig
 
+[![CI](https://github.com/PaytonWebber/model2vec-zig/actions/workflows/ci.yml/badge.svg)](https://github.com/PaytonWebber/model2vec-zig/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/PaytonWebber/model2vec-zig)](https://github.com/PaytonWebber/model2vec-zig/releases)
+[![License: MIT](https://img.shields.io/github/license/PaytonWebber/model2vec-zig)](LICENSE)
+
 [Model2Vec](https://github.com/MinishLab/model2vec) inference in pure Zig.
 Static embeddings: a text becomes a vector through tokenization, a table
-lookup, and a mean. There is no transformer at runtime.
+lookup, and a mean. There is no transformer at runtime. About 4 us per embed
+from a ~30 MB model file, with quantized formats down to 3.9 MB, in a binary
+with zero dependencies.
 
 ## Quickstart
 
@@ -48,8 +54,9 @@ ships as a single file.
 - **Zero dependencies**: Zig std only. No model server, no network, no
   native libraries. Embedding works offline on first run.
 - **Reference parity**: output vectors match the Python implementation to
-  an absolute difference under 1e-5, and the i8 quantizer is byte-identical
-  to the reference quantizer.
+  an absolute difference under 1e-5, the i8 quantizer is byte-identical to
+  the reference quantizer, and MinishLab's published MTEB scores reproduce
+  per-task on this implementation's models (see Quantization).
 - **Allocation-free hot path**: `Model.embedInto` writes into a caller-owned
   buffer and uses its allocator only for tokenization scratch, so an arena
   reset between calls embeds with no per-call heap growth.
