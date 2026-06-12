@@ -160,6 +160,13 @@ accents, emoji, identifiers, and overlong words, compared against vectors
 produced by the Python reference implementation, with a maximum absolute
 difference under 1e-5.
 
+The safetensors parser, which is the part that handles untrusted input, is
+fuzzed: every test run includes a randomized harness (raw bytes,
+length-framed bytes, and valid files with corrupted bytes), and the same
+invariants hook into Zig's coverage-guided fuzzer via `zig build test
+--fuzz`. The fuzz entry point needs a Zig newer than 0.16.0, whose test
+runner does not compile in fuzz mode.
+
 ## License
 
 MIT. The potion models are MinishLab's, also MIT.

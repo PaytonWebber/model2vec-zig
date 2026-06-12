@@ -76,7 +76,9 @@ pub const Options = struct {
 pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, opts: Options) Error!Embeddings {
     if (bytes.len < 8) return error.TruncatedFile;
     const header_len = std.mem.readInt(u64, bytes[0..8], .little);
-    if (8 + header_len > bytes.len) return error.TruncatedFile;
+    // Subtraction, not `8 + header_len > bytes.len`: a near-max header_len
+    // would wrap the addition and pass the check.
+    if (header_len > bytes.len - 8) return error.TruncatedFile;
     const header_bytes = bytes[8 .. 8 + header_len];
 
     var arena = std.heap.ArenaAllocator.init(allocator);
@@ -103,10 +105,10 @@ pub fn parse(allocator: std.mem.Allocator, bytes: []const u8, opts: Options) Err
     const cols = intField(shape.array.items[1]) orelse return error.BadShape;
 
     const data_start = 8 + header_len;
-    if (data_start > bytes.len) return error.TruncatedFile;
     const raw = tensorRegion(bytes, tensor, data_start) orelse return error.TruncatedFile;
     const elem_size: usize = if (is_f32) 4 else 1;
-    if (raw.len != rows * cols * elem_size) return error.BadShape;
+    if (raw.len != checkedSize(rows, cols, elem_size) orelse return error.BadShape)
+        return error.BadShape;
 
     if (is_f32) {
         if (borrowable(opts) and isAlignedFor(raw, f32)) {
@@ -157,14 +159,17 @@ fn parseTq4(
 
     const data_start = 8 + header_len;
     const packed_raw = tensorRegion(bytes, tq, data_start) orelse return error.TruncatedFile;
-    if (packed_raw.len != rows * half_cols) return error.BadShape;
+    if (packed_raw.len != checkedSize(rows, half_cols, 1) orelse return error.BadShape)
+        return error.BadShape;
 
     const scales_tensor = header.object.get("scales") orelse return error.BadHeader;
     if (scales_tensor != .object) return error.BadHeader;
     const scales_dtype = stringField(scales_tensor, "dtype") orelse return error.BadHeader;
     if (!std.mem.eql(u8, scales_dtype, "F32")) return error.UnsupportedDtype;
     const scales_raw = tensorRegion(bytes, scales_tensor, data_start) orelse return error.TruncatedFile;
-    if (scales_raw.len != rows * 4) return error.BadShape;
+    if (scales_raw.len != checkedSize(rows, 4, 1) orelse return error.BadShape)
+        return error.BadShape;
+    const cols = std.math.mul(usize, half_cols, 2) catch return error.BadShape;
 
     if (borrowable(opts) and isAlignedFor(scales_raw, f32)) {
         return .{
@@ -173,7 +178,7 @@ fn parseTq4(
                 .scales = @alignCast(std.mem.bytesAsSlice(f32, scales_raw)),
             } },
             .rows = rows,
-            .cols = half_cols * 2,
+            .cols = cols,
             .borrowed = true,
         };
     }
@@ -201,12 +206,20 @@ fn isAlignedFor(raw: []const u8, comptime T: type) bool {
     return std.mem.isAligned(@intFromPtr(raw.ptr), @alignOf(T));
 }
 
+/// rows * cols * elem_size, or null on overflow.
+fn checkedSize(rows: usize, cols: usize, elem_size: usize) ?usize {
+    const cells = std.math.mul(usize, rows, cols) catch return null;
+    return std.math.mul(usize, cells, elem_size) catch return null;
+}
+
 fn tensorRegion(bytes: []const u8, tensor: std.json.Value, data_start: u64) ?[]const u8 {
     const offsets = tensor.object.get("data_offsets") orelse return null;
     if (offsets != .array or offsets.array.items.len != 2) return null;
     const begin = intField(offsets.array.items[0]) orelse return null;
     const end = intField(offsets.array.items[1]) orelse return null;
-    if (end < begin or data_start + end > bytes.len) return null;
+    // Subtraction, not `data_start + end > bytes.len`: huge offsets would
+    // wrap the addition and pass the check.
+    if (end < begin or data_start > bytes.len or end > bytes.len - data_start) return null;
     return bytes[data_start + begin .. data_start + end];
 }
 
@@ -354,6 +367,136 @@ test "parse rejects tq4 without a known version" {
         \\{"__metadata__":{"tq4_version":"2"},"embeddings_tq4":{"dtype":"U8","shape":[2,2],"data_offsets":[0,4]},"scales":{"dtype":"F32","shape":[2],"data_offsets":[4,12]}}
     );
     try testing.expectError(error.UnsupportedTq4Version, parse(testing.allocator, future, .{}));
+}
+
+/// Parse must either error or return a matrix whose every claimed byte is
+/// readable and sized consistently with rows * cols. Crashes, leaks, and
+/// out-of-bounds slices are bugs; errors are expected outcomes.
+fn checkParseInvariants(input: []const u8) !void {
+    for ([_]Options{ .{}, .{ .borrow = true } }) |opts| {
+        const emb = parse(testing.allocator, input, opts) catch continue;
+        defer emb.deinit(testing.allocator);
+
+        switch (emb.matrix) {
+            .f32_data => |d| {
+                try testing.expectEqual(emb.rows * emb.cols, d.len);
+                if (d.len > 0) std.mem.doNotOptimizeAway(d[0] + d[d.len - 1]);
+            },
+            .i8_data => |d| {
+                try testing.expectEqual(emb.rows * emb.cols, d.len);
+                if (d.len > 0) std.mem.doNotOptimizeAway(d[0] +% d[d.len - 1]);
+            },
+            .tq4_data => |t| {
+                try testing.expectEqual(emb.rows * emb.cols / 2, t.packed_data.len);
+                try testing.expectEqual(emb.rows, t.scales.len);
+                if (t.packed_data.len > 0) std.mem.doNotOptimizeAway(t.packed_data[t.packed_data.len - 1]);
+                if (t.scales.len > 0) std.mem.doNotOptimizeAway(t.scales[t.scales.len - 1]);
+            },
+        }
+    }
+}
+
+// Coverage-guided fuzzing of the same invariants: `zig build test --fuzz`.
+// (The 0.16.0 test runner fails to compile in fuzz mode; this entry point
+// works on Zig versions with the fixed runner and runs as a smoke test
+// otherwise.) The framed mode wraps fuzzer-chosen header bytes in a valid
+// length prefix so coverage reaches the JSON and offset logic instead of
+// stopping at the length check.
+test "fuzz parse" {
+    try std.testing.fuzz({}, fuzzParse, .{});
+}
+
+fn fuzzParse(_: void, smith: *std.testing.Smith) anyerror!void {
+    @disableInstrumentation();
+    var buf: [4096]u8 = undefined;
+
+    const framed = smith.value(bool);
+    var input: []const u8 = undefined;
+    if (framed) {
+        const header_len = smith.slice(buf[8..2048]);
+        std.mem.writeInt(u64, buf[0..8], header_len, .little);
+        const data_len = smith.slice(buf[8 + header_len ..]);
+        input = buf[0 .. 8 + header_len + data_len];
+    } else {
+        input = buf[0..smith.slice(&buf)];
+    }
+
+    try checkParseInvariants(input);
+}
+
+// Deterministic randomized harness over the same invariants, run on every
+// `zig build test`: raw byte soup, length-framed soup, and valid fixtures
+// with a few bytes corrupted (which reaches the offset and shape logic that
+// random bytes never parse far enough to touch).
+test "parse survives random and corrupted inputs" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const fixtures = [_][]const u8{
+        try buildFixture(a,
+            \\{"embeddings":{"dtype":"F32","shape":[2,3],"data_offsets":[0,24]}}
+        , &.{ 1.0, 2.0, 3.0, -1.5, 0.25, 0.0 }),
+        try buildTq4Fixture(a,
+            \\{"__metadata__":{"tq4_version":"1"},"embeddings_tq4":{"dtype":"U8","shape":[2,2],"data_offsets":[0,4]},"scales":{"dtype":"F32","shape":[2],"data_offsets":[4,12]}}
+        ),
+    };
+
+    var prng = std.Random.DefaultPrng.init(0x5af37e45_0f2e11);
+    const rand = prng.random();
+    var buf: [512]u8 = undefined;
+
+    for (0..20_000) |_| {
+        switch (rand.enumValue(enum { raw, framed, corrupted })) {
+            .raw => {
+                const len = rand.uintAtMost(usize, buf.len);
+                rand.bytes(buf[0..len]);
+                try checkParseInvariants(buf[0..len]);
+            },
+            .framed => {
+                const header_len = rand.uintAtMost(usize, 200);
+                const data_len = rand.uintAtMost(usize, buf.len - 8 - 200);
+                std.mem.writeInt(u64, buf[0..8], header_len, .little);
+                rand.bytes(buf[8 .. 8 + header_len + data_len]);
+                try checkParseInvariants(buf[0 .. 8 + header_len + data_len]);
+            },
+            .corrupted => {
+                const fixture = fixtures[rand.uintLessThan(usize, fixtures.len)];
+                const input = buf[0..fixture.len];
+                @memcpy(input, fixture);
+                for (0..1 + rand.uintLessThan(usize, 16)) |_| {
+                    input[rand.uintLessThan(usize, input.len)] = rand.int(u8);
+                }
+                try checkParseInvariants(input);
+            },
+        }
+    }
+}
+
+test "parse rejects overflowing lengths, offsets, and shapes" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    // header_len near maxInt(u64): `8 + header_len` wraps, so the bounds
+    // check must subtract instead.
+    var wrap_len: [16]u8 = undefined;
+    std.mem.writeInt(u64, wrap_len[0..8], std.math.maxInt(u64) - 3, .little);
+    @memset(wrap_len[8..], 0);
+    try testing.expectError(error.TruncatedFile, parse(testing.allocator, &wrap_len, .{}));
+
+    // data_offsets far past the end of the file.
+    const wrap_offsets = try buildFixture(a,
+        \\{"embeddings":{"dtype":"F32","shape":[1,1],"data_offsets":[9223372036854775800,9223372036854775804]}}
+    , &.{1.0});
+    try testing.expectError(error.TruncatedFile, parse(testing.allocator, wrap_offsets, .{}));
+
+    // shape product overflows usize: 2^62 * 4 == 0 mod 2^64, which would
+    // match an empty data region without the checked multiply.
+    const wrap_shape = try buildFixture(a,
+        \\{"embeddings":{"dtype":"F32","shape":[4611686018427387904,4],"data_offsets":[0,0]}}
+    , &.{});
+    try testing.expectError(error.BadShape, parse(testing.allocator, wrap_shape, .{}));
 }
 
 test "parse rejects wrong dtype and missing tensor" {
