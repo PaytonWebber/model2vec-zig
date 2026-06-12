@@ -56,7 +56,7 @@ ships as a single file.
 - **Reference parity**: output vectors match the Python implementation to
   an absolute difference under 1e-5, the i8 quantizer is byte-identical to
   the reference quantizer, and MinishLab's published MTEB scores reproduce
-  per-task on this implementation's models (see Quantization).
+  per-task on this implementation's models (see [Quantization](#quantization)).
 - **Allocation-free hot path**: `Model.embedInto` writes into a caller-owned
   buffer and uses its allocator only for tokenization scratch, so an arena
   reset between calls embeds with no per-call heap growth.
