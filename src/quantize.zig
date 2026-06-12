@@ -37,7 +37,7 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
 
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, in_path, a, .limited(2 * 1024 * 1024 * 1024));
-    const emb = try safetensors.parse(a, bytes);
+    const emb = try safetensors.parse(a, bytes, .{ .borrow = true });
     const data = switch (emb.matrix) {
         .f32_data => |d| d,
         // Idempotent: re-running over an already-quantized model (a restored
@@ -118,9 +118,13 @@ fn writeI8Safetensors(a: std.mem.Allocator, io: std.Io, path: []const u8, data: 
 fn writeTq4Safetensors(a: std.mem.Allocator, io: std.Io, path: []const u8, q: tq.Quantized, rows: usize, cols: usize) !void {
     const packed_len = q.packed_data.len;
     const scales_len = q.scales.len * 4;
+    // tq4_version marks the layout (rotation construction, nibble packing)
+    // so a future format change is detectable instead of silently producing
+    // incomparable vectors.
     const header = try std.fmt.allocPrint(
         a,
-        "{{\"embeddings_tq4\":{{\"dtype\":\"U8\",\"shape\":[{d},{d}],\"data_offsets\":[0,{d}]}}," ++
+        "{{\"__metadata__\":{{\"tq4_version\":\"1\"}}," ++
+            "\"embeddings_tq4\":{{\"dtype\":\"U8\",\"shape\":[{d},{d}],\"data_offsets\":[0,{d}]}}," ++
             "\"scales\":{{\"dtype\":\"F32\",\"shape\":[{d}],\"data_offsets\":[{d},{d}]}}}}",
         .{ rows, cols / 2, packed_len, rows, packed_len, packed_len + scales_len },
     );

@@ -176,7 +176,9 @@ boundaries; and the difference is 4 MB on the largest potion model.
 - There is no external reference for the format. i8 is byte-identical to the
   reference implementation's quantizer and testable as such; tq4 correctness
   rests on the orthonormality, round-trip, and similarity-structure tests in
-  this repo.
+  this repo. tq4 files carry a `tq4_version` field in the safetensors
+  metadata, and the reader rejects unknown versions, so a future layout
+  change is an error rather than silently incomparable vectors.
 - The rotation is built with O(d^3) Gram-Schmidt at quantization time. This
   is negligible at d=512; a structured rotation (Hadamard) is the standard
   replacement at much larger d.

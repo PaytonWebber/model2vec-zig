@@ -35,6 +35,12 @@ pub const Model = struct {
     /// pooled as raw values: the global quantization scale cancels under L2
     /// normalization, matching the reference implementation.
     embeddings: safetensors.Matrix,
+    /// True when `embeddings` points into caller- or file-owned bytes
+    /// instead of allocations of its own.
+    matrix_borrowed: bool,
+    /// The safetensors file contents when `load` read them and the matrix
+    /// borrows from them; freed in deinit.
+    file_bytes: ?[]align(8) const u8,
     rows: usize,
     dim: usize,
     normalize: bool,
@@ -47,7 +53,20 @@ pub const Model = struct {
         const a = arena.allocator();
 
         const tok_bytes = readFile(a, io, dir_path, "tokenizer.json") catch return error.ReadFailed;
-        const st_bytes = readFile(a, io, dir_path, "model.safetensors") catch return error.ReadFailed;
+
+        // Read into an 8-byte-aligned buffer so the matrix can point into it
+        // instead of being copied out (safetensors data regions are 8-byte
+        // aligned within the file).
+        const st_path = std.fs.path.join(a, &.{ dir_path, "model.safetensors" }) catch return error.OutOfMemory;
+        const st_bytes = std.Io.Dir.cwd().readFileAllocOptions(
+            io,
+            st_path,
+            gpa,
+            .limited(256 * 1024 * 1024),
+            .of(u64),
+            null,
+        ) catch return error.ReadFailed;
+        errdefer gpa.free(st_bytes);
 
         // `normalize` defaults to true; missing config.json is fine.
         const norm = blk: {
@@ -59,12 +78,26 @@ pub const Model = struct {
             break :blk if (v == .bool) v.bool else true;
         };
 
-        return loadFromBytes(gpa, tok_bytes, st_bytes, .{ .normalize = norm });
+        var model = try loadFromBytes(gpa, tok_bytes, st_bytes, .{ .normalize = norm });
+        if (model.matrix_borrowed) {
+            model.file_bytes = st_bytes;
+        } else {
+            gpa.free(st_bytes);
+        }
+        return model;
     }
 
     /// Load from in-memory file contents, for models shipped inside the
     /// binary via @embedFile. `normalize` mirrors config.json's `normalize`
     /// key; the potion family uses true.
+    ///
+    /// `safetensors_bytes` must outlive the Model: on little-endian targets
+    /// the matrix points into it directly when alignment allows. @embedFile
+    /// data is 1-aligned, so to get the zero-copy path, embed through an
+    /// aligned copy:
+    ///
+    ///     const st = @embedFile("model.safetensors");
+    ///     const st_aligned: [st.len]u8 align(8) = st.*;
     pub fn loadFromBytes(
         gpa: std.mem.Allocator,
         tokenizer_json: []const u8,
@@ -74,7 +107,7 @@ pub const Model = struct {
         var tok = try Tokenizer.initFromJson(gpa, tokenizer_json);
         errdefer tok.deinit();
 
-        const emb = try safetensors.parse(gpa, safetensors_bytes);
+        const emb = try safetensors.parse(gpa, safetensors_bytes, .{ .borrow = true });
 
         if (tok.unk_id >= emb.rows) return error.BadShape;
 
@@ -82,6 +115,8 @@ pub const Model = struct {
             .gpa = gpa,
             .tok = tok,
             .embeddings = emb.matrix,
+            .matrix_borrowed = emb.borrowed,
+            .file_bytes = null,
             .rows = emb.rows,
             .dim = emb.cols,
             .normalize = options.normalize,
@@ -90,7 +125,8 @@ pub const Model = struct {
 
     pub fn deinit(self: *Model) void {
         self.tok.deinit();
-        self.embeddings.deinit(self.gpa);
+        if (!self.matrix_borrowed) self.embeddings.deinit(self.gpa);
+        if (self.file_bytes) |b| self.gpa.free(b);
         self.* = undefined;
     }
 

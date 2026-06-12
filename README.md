@@ -44,7 +44,9 @@ const vec = try model.embed(allocator, "the daemon owns the store");
 
 `Model.loadFromBytes` takes the tokenizer and safetensors as byte slices, so
 a model can be compiled into the binary with `@embedFile` and the program
-ships as a single file.
+ships as a single file. Loading is zero-copy: the matrix points into the
+file or embedded bytes (which must outlive the model) instead of being
+copied to the heap.
 
 ## Main features
 

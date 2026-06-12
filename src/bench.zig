@@ -23,8 +23,11 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn benchDir(gpa: std.mem.Allocator, io: std.Io, dir: []const u8) !void {
+    const load_start = std.Io.Timestamp.now(io, .awake);
     var model = try m2v.Model.load(gpa, io, dir);
     defer model.deinit();
+    const load_ns = std.Io.Timestamp.now(io, .awake).nanoseconds - load_start.nanoseconds;
+    std.debug.print("{s}: load {d:.1} ms\n", .{ dir, @as(f64, @floatFromInt(load_ns)) / 1e6 });
 
     var arena = std.heap.ArenaAllocator.init(gpa);
     defer arena.deinit();
