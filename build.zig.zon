@@ -1,12 +1,13 @@
 .{
     .name = .model2vec,
-    .version = "0.1.0",
+    .version = "0.2.0",
     .fingerprint = 0xff8327d1969e21d2,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",
+        "CHANGELOG.md",
         "LICENSE",
         "README.md",
         "src",

@@ -15,7 +15,7 @@ with zero dependencies.
 Add the dependency:
 
 ```bash
-zig fetch --save=model2vec "git+https://github.com/PaytonWebber/model2vec-zig#v0.1.0"
+zig fetch --save=model2vec "git+https://github.com/PaytonWebber/model2vec-zig#v0.2.0"
 ```
 
 ```zig
