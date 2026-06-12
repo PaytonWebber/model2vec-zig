@@ -24,7 +24,9 @@ const model2vec = b.dependency("model2vec", .{ .target = target, .optimize = opt
 exe.root_module.addImport("model2vec", model2vec.module("model2vec"));
 ```
 
-Fetch a model and embed:
+Fetch a model and embed (the script lives in this repo; equivalently,
+download `tokenizer.json`, `model.safetensors`, and `config.json` from the
+model's HuggingFace page into a directory):
 
 ```bash
 ./scripts/fetch-model.sh potion-base-8M
@@ -48,7 +50,7 @@ ships as a single file.
 
 - **Small**: potion-base-8M is ~30 MB on disk as published. The bundled
   quantizer reduces it to 7.6 MB (i8) or 3.9 MB (4-bit) with measured
-  quality cost (see Quantization).
+  quality cost (see [Quantization](#quantization)).
 - **Fast inference**: 4.1 us per embed of a 17-token text on potion-base-8M
   (x86_64 Linux, ReleaseFast), about 240k embeds per second.
 - **Zero dependencies**: Zig std only. No model server, no network, no
@@ -83,7 +85,7 @@ Models load directly from their HuggingFace layout: a directory containing
 | Model | Dimensions | Disk | Notes |
 |---|---|---|---|
 | [potion-base-2M](https://huggingface.co/minishlab/potion-base-2M) | 64 | ~8 MB | smallest |
-| [potion-base-8M](https://huggingface.co/minishlab/potion-base-8M) | 256 | ~30 MB | fetch-model.sh default; benchmarked here |
+| [potion-base-8M](https://huggingface.co/minishlab/potion-base-8M) | 256 | ~30 MB | fetch-model.sh default; benchmarked below |
 | [potion-retrieval-32M](https://huggingface.co/minishlab/potion-retrieval-32M) | 512 | ~125 MB | tuned for retrieval |
 
 ## Quantization
@@ -138,7 +140,7 @@ has its own scratch allocator. `zig build bench` reproduces the numbers.
 
 - WordPiece tokenizers only, which covers the potion family. BPE and Unigram
   models are rejected at load.
-- F32 and I8 safetensors are read; f16 is not.
+- F32, I8, and this repo's tq4 safetensors are read; f16 is not.
 - The normalizer folds Latin accents with a table instead of full Unicode
   NFD (Zig's std has no normalization). Latin-script and code text matches
   the reference exactly; other scripts pass through unfolded and may
